@@ -11,7 +11,7 @@
     --exit-color: #4ade80;
     --opened-color: #b3e5ff;
     --select-outline: #1d7cff;
-    /* Уменьшено на ~10% */
+    /* уменьшенный D-pad (~ -10%) */
     --dpad-base: 58;
     --dpad-size: clamp(43px, calc((38px + 3vw)*0.9), calc(var(--dpad-base) * 1px));
     --dpad-gap: var(--dpad-size);
@@ -239,45 +239,60 @@
   .dpad-row {
     display:flex;
     align-items:flex-start;
-    gap: clamp(10px, 2vw, 24px);
+    gap: clamp(12px, 2vw, 28px);
     flex-wrap: wrap;
-    overflow-x: visible;
     padding-bottom:4px;
     max-width:100%;
   }
 
-  /* --- HORIZONTAL DPAD (уменьшен) --- */
+  /* --- CROSS (перекрестие) DPAD --- */
   .dpad, .walls-dpad {
-    display: flex;
-    flex-direction: row;
-    align-items: stretch;
-    gap: clamp(6px, 1vw, 10px);
-    width: 100%;
-    justify-content: flex-start;
-    flex-wrap: nowrap;
+    display: grid;
+    grid-template-columns: repeat(3, var(--dpad-size));
+    grid-template-rows: repeat(3, var(--dpad-size));
+    gap: clamp(5px, 0.8vw, 8px);
+    width: max-content;
+  }
+
+  .dpad {
+    grid-template-areas:
+      ". up ."
+      "left center right"
+      ". down .";
+  }
+  .walls-dpad {
+    grid-template-areas:
+      ". wup ."
+      "wleft . wright"
+      ". wdown .";
   }
 
   .dpad button,
   .walls-dpad button {
-    width: var(--dpad-size);
-    height: var(--dpad-size);
+    width: 100%;
+    height: 100%;
     justify-content: center;
     font-size: clamp(15px, 0.95rem + 0.45vw, 19px);
     padding: 0;
   }
 
-  .dpad-left   { order: 1; }
-  .dpad-up     { order: 2; }
-  .dpad-center { order: 3; font-size: clamp(12px, 0.7rem + 0.4vw, 14px) !important; font-weight:600; letter-spacing:.5px; }
-  .dpad-down   { order: 4; }
-  .dpad-right  { order: 5; }
-
+  .dpad-up { grid-area: up; }
+  .dpad-left { grid-area: left; }
+  .dpad-right { grid-area: right; }
+  .dpad-down { grid-area: down; }
+  .dpad-center {
+    grid-area: center;
+    font-size: clamp(12px, 0.7rem + 0.4vw, 14px) !important;
+    font-weight:600;
+    letter-spacing:.5px;
+    padding:4px;
+  }
   .dpad-center.active { background:#1d7cff; color:#fff; border-color:#1d7cff; }
 
-  .walls-dpad .wall-left  { order: 1; }
-  .walls-dpad .wall-up    { order: 2; }
-  .walls-dpad .wall-down  { order: 3; }
-  .walls-dpad .wall-right { order: 4; }
+  .walls-dpad .wall-up { grid-area: wup; }
+  .walls-dpad .wall-left { grid-area: wleft; }
+  .walls-dpad .wall-right { grid-area: wright; }
+  .walls-dpad .wall-down { grid-area: wdown; }
 
   .walls-dpad button {
     font-size: clamp(12px, 0.7rem + 0.35vw, 15px);
@@ -292,7 +307,6 @@
     opacity:.7;
     letter-spacing:.4px;
   }
-
   .walls-dpad button.active-wall { background:#ffe1e1; border-color:#ff7b7b; }
 
   #gridWrapper::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -342,8 +356,7 @@
     #app { padding: 10px 10px 22px; }
     .panel { padding: 12px 12px 0; }
     .dpad, .walls-dpad {
-      flex-wrap: wrap;
-      justify-content: center;
+      gap: clamp(4px, 1.8vw, 6px);
     }
     .dpad button,
     .walls-dpad button {
