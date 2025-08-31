@@ -2,6 +2,19 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
+  <script>
+    const V = '4';
+    const head = document.currentScript.parentElement;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'styles.css?v=' + V;
+    head.appendChild(link);
+
+    const script = document.createElement('script');
+    script.src = 'app.js?v=' + V;
+    script.defer = true;
+    head.appendChild(script);
+  </script>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=yes" />
   <title>Редактор лабиринта 15×15 (Этаж + Подвал)</title>
   <meta name="description" content="Редактор лабиринта 15×15 (2 уровня) с автосохранением, экспортом JSON и текстового формата.">
