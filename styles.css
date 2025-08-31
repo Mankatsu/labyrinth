@@ -1,23 +1,16 @@
   :root {
-    /* ADAPTIVE: управляемые границы размера клетки */
     --cell-max: 32px;
     --cell-min: 18px;
-    /* Боковые внутренние отступы страницы (примерно суммарно паддинги #app + рамки) */
     --page-x-padding: 14px;
-    /* Вычисляемая ширина клетки:
-       100vw - (два горизонтальных паддинга #app) - небольшой запас (40px) для рамок/скролла
-       Делим на 15 столбцов, ограничиваем min/max */
     --size: clamp(var(--cell-min),
                   calc((100vw - (2 * var(--page-x-padding)) - 40px) / 15),
                   var(--cell-max));
-    /* Цвета — как было */
     --wall-color: #d60000;
     --fork-color: #ffd400;
     --ladder-color: #ff8ad8;
     --exit-color: #4ade80;
     --opened-color: #b3e5ff;
     --select-outline: #1d7cff;
-    /* D‑pad: оставим переменную, но тоже сделаем адаптивной */
     --dpad-base: 64;
     --dpad-size: clamp(48px, calc(38px + 3vw), calc(var(--dpad-base) * 1px));
     --dpad-gap: var(--dpad-size);
@@ -25,7 +18,7 @@
 
   * {
     -webkit-tap-highlight-color: rgba(0,0,0,0);
-    box-sizing: border-box; /* ADAPTIVE: единое управление ширинами */
+    box-sizing: border-box;
   }
 
   body {
@@ -36,7 +29,6 @@
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    /* Fluid базовый шрифт */
     font-size: clamp(14px, 0.95rem + 0.3vw, 17px);
   }
 
@@ -57,7 +49,7 @@
     padding: 12px 14px 28px;
     flex-wrap: wrap;
     align-items: flex-start;
-    width: 100%; /* ADAPTIVE */
+    width: 100%;
   }
 
   .panel {
@@ -67,7 +59,6 @@
     padding: 14px 14px 0;
     box-shadow: 0 2px 4px rgba(0,0,0,.06);
     position: relative;
-    /* ADAPTIVE: ширина панели гибкая */
     flex: 1 1 320px;
     min-width: 260px;
     max-width: 100%;
@@ -75,7 +66,7 @@
 
   .panel h2 {
     font-size: clamp(13px, 0.75rem + 0.4vw, 16px);
-    margin: 0 0 0;
+    margin: 0;
     font-weight: 600;
     letter-spacing: .5px;
     text-transform: uppercase;
@@ -84,7 +75,7 @@
 
   #gridWrapper {
     position: relative;
-    max-width: 100%;  /* ADAPTIVE */
+    max-width: 100%;
     overflow: auto;
     overscroll-behavior: contain;
     touch-action: pan-x pan-y;
@@ -95,7 +86,7 @@
 
   #grid {
     display: grid;
-    grid-template-columns: repeat(15, var(--size)); /* фиксировано 15 */
+    grid-template-columns: repeat(15, var(--size));
     grid-template-rows: repeat(15, var(--size));
     gap: 0;
     user-select: none;
@@ -112,7 +103,6 @@
     align-items: flex-end;
     justify-content: flex-end;
     padding: 2px 3px;
-    box-sizing: border-box;
     background: #fff;
     border: 1px dashed #d0d0d0;
     cursor: pointer;
@@ -148,6 +138,9 @@
     margin-bottom: 10px;
     align-items: stretch;
   }
+  .controls-group > button {
+    flex: 1 1 120px; /* равномерное распределение */
+  }
 
   button {
     border: 1px solid #b7b7b7;
@@ -162,7 +155,7 @@
     transition: background .15s, border-color .15s, transform .06s;
     min-height: 38px;
     touch-action: manipulation;
-    max-width: 100%; /* ADAPTIVE */
+    max-width: 100%;
   }
   button:focus-visible { outline: 2px solid #1d7cff; outline-offset: 2px; }
   button:hover { background: #f0f6ff; }
@@ -187,7 +180,6 @@
     border-radius: 8px;
     border:1px solid #ccc;
     resize: vertical;
-    box-sizing: border-box;
   }
   .export-area.short { min-height:80px; }
 
@@ -224,7 +216,6 @@
     width:16px;height:16px;
     border:1px solid #bbb;
     border-radius:4px;
-    box-sizing:border-box;
   }
   .legend i.fork { background: var(--fork-color); }
   .legend i.ladder { background: var(--ladder-color); }
@@ -248,10 +239,10 @@
     display:flex;
     align-items:flex-start;
     gap: var(--dpad-gap);
-    flex-wrap: nowrap;
+    flex-wrap: nowrap; /* будет переопределено на узком экране */
     overflow-x:auto;
     padding-bottom:4px;
-    max-width:100%; /* ADAPTIVE */
+    max-width:100%;
   }
 
   .dpad, .walls-dpad {
@@ -330,10 +321,8 @@
     margin-top:6px;
     font-family: ui-monospace, monospace;
     white-space:pre-wrap;
+    overflow-wrap:anywhere; /* предотвращает горизонтальный скролл */
   }
-
-  /* Упрощённые медиа — многие вещи уже через clamp().
-     Оставляем только при необходимости точечных подстройок */
 
   @media (max-width: 1100px) {
     #app { flex-direction: column; }
@@ -341,8 +330,39 @@
     #controlPanelContainer { order: 2; }
   }
 
-  /* Адаптацию размеров клеток теперь делает формула clamp(),
-     эти нижние можно при желании удалить или оставить как “жёсткие ограничения” */
+  /* УЗКИЙ РЕЖИМ: вся сетка вписывается в ширину, клетки становятся флюидными */
+  @media (max-width: 540px) {
+    #grid {
+      grid-template-columns: repeat(15, 1fr);
+      width: 100%;
+      max-width: 100%;
+      grid-auto-rows: 1fr;
+    }
+    .cell {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1 / 1;
+      font-size: clamp(8px, 2.3vw, 12px);
+      padding: 2px;
+    }
+    /* уменьшаем внутренние зазоры */
+    #app { padding: 10px 10px 22px; }
+    .panel { padding: 12px 12px 0; }
+    .dpad-row {
+      flex-wrap: wrap;
+      gap: clamp(12px, 3vw, 18px);
+      justify-content: center;
+    }
+    .dpad, .walls-dpad {
+      width: 100%;
+      justify-items: center;
+    }
+    button {
+      min-height: 34px;
+      padding: 7px 10px;
+    }
+  }
+
   @media (max-width: 600px) {
     .legend { font-size:11px; }
     .coords-display { font-size:12px; }
