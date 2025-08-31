@@ -34,6 +34,15 @@
       }
     }
 
+    // Синхронизация лестниц: если на одном из этажей в клетке есть лестница — ставим на обоих
+    function unifyLadders() {
+      for (let i = 0; i < TOTAL; i++) {
+        const has = data[0][i].ladder || data[1][i].ladder;
+        if (data[0][i].ladder !== has) { data[0][i].ladder = has; markDirty('ladder'); }
+        if (data[1][i].ladder !== has) { data[1][i].ladder = has; markDirty('ladder'); }
+      }
+    }
+
     // Восстановление
     let pendingAutosaveDecision = false;
     const existingAutosaveRaw = localStorage.getItem(AUTO_KEY);
@@ -90,7 +99,7 @@
       if (gridEl) {
         gridEl.querySelectorAll('.cell').forEach(cell => {
           const i = parseInt(cell.dataset.index);
-            const st = floorData[i];
+          const st = floorData[i];
           cell.className = 'cell';
           if (st.walls & WALL.top) cell.classList.add('wall-top');
           if (st.walls & WALL.right) cell.classList.add('wall-right');
@@ -193,10 +202,26 @@
 
     function toggleMarker(type) {
       if (currentIndex === null) return;
+
+      // Лестница: переключаем одновременно на обоих этажах
+      if (type === 'ladder') {
+        const idx = currentIndex;
+        const newVal = !data[currentFloor][idx].ladder;
+        for (let f = 0; f < 2; f++) {
+          if (data[f][idx].ladder !== newVal) {
+            data[f][idx].ladder = newVal;
+            markDirty('ladder');
+          }
+        }
+        refreshGrid();
+        autoSave();
+        return;
+      }
+
+      // Остальные маркеры работают только для текущего этажа
       const st = data[currentFloor][currentIndex];
       let before;
       if (type==='fork') { before = st.fork; st.fork = !st.fork; if (before!==st.fork) markDirty('fork'); }
-      if (type==='ladder') { before = st.ladder; st.ladder = !st.ladder; if (before!==st.ladder) markDirty('ladder'); }
       if (type==='exit') { before = st.exit; st.exit = !st.exit; if (before!==st.exit) markDirty('exit'); }
       refreshGrid();
       autoSave();
@@ -255,6 +280,9 @@
       currentFloor = obj.meta?.floor ?? 0;
       if (currentFloor > 1) currentFloor = 0;
       currentIndex = (typeof obj.meta?.sel === 'number' && obj.meta.sel >=0 && obj.meta.sel < TOTAL) ? obj.meta.sel : 0;
+
+      // Выровнять лестницы между этажами (если старые данные были несинхронны)
+      unifyLadders();
       refreshGrid();
       document.querySelectorAll('#floorButtons button').forEach(btn => {
         btn.classList.toggle('active', parseInt(btn.dataset.floor) === currentFloor);
@@ -309,7 +337,7 @@
         for (let r=0; r<ROWS; r++) {
           const line = lines[idx+1+r];
           if (!line) throw new Error(`Недостаточно строк для FLOOR ${f}`);
-          const tokens = line.split(/\s+/);
+            const tokens = line.split(/\s+/);
           if (tokens.length !== COLS) throw new Error(`Строка ${r+1} этажа ${f}: ожидается ${COLS} токенов`);
           rowsData.push(tokens);
         }
@@ -348,6 +376,8 @@
       data = newData;
       currentFloor = selFloor-1;
       currentIndex = selIndex-1;
+      // Синхронизация лестниц после текстового импорта
+      unifyLadders();
       refreshGrid();
       document.querySelectorAll('#floorButtons button').forEach(btn => {
         btn.classList.toggle('active', parseInt(btn.dataset.floor) === currentFloor);
