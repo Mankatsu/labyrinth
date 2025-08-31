@@ -126,10 +126,10 @@
       var(--ladder-color) 33.34% 66.67%,
       var(--exit-color) 66.67% 100%);
   }
-  .cell.wall-top { border-top: 1px solid var(--wall-color); }
-  .cell.wall-right { border-right: 1px solid var(--wall-color); }
-  .cell.wall-bottom { border-bottom: 1px solid var(--wall-color); }
-  .cell.wall-left { border-left: 1px solid var(--wall-color); }
+  .cell.wall-top { border-top: 2px solid var(--wall-color); }
+  .cell.wall-right { border-right: 2px solid var(--wall-color); }
+  .cell.wall-bottom { border-bottom: 2px solid var(--wall-color); }
+  .cell.wall-left { border-left: 2px solid var(--wall-color); }
   .cell.opened { background: var(--opened-color) !important; }
 
   .controls-group {
