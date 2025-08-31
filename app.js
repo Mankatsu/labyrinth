@@ -495,8 +495,8 @@
       case '4': toggleWall('left'); break;
       case 'f': toggleMarker('fork'); break;
       case 'l': toggleMarker('ladder'); break;
-      case 'e': toggleMarker('exit'); break;
-      case 'h': toggleOpened(); break;
+      case 'h': toggleMarker('exit'); break;
+      case 'e': toggleOpened(); break;
       case 'tab':
         setFloor(currentFloor === 0 ? 1 : 0);
         e.preventDefault();
