@@ -16,19 +16,22 @@
     ];
     let currentFloor = 0;
     let currentIndex = null;
+
+    // Управление автосохранением
     let suppressAutoSave = false;
+    let dirty = false;
+    function markDirty(reason) {
+      if (!dirty) {
+        dirty = true;
+        // console.log('Dirty:', reason);
+      }
+    }
 
-    // Файловое автосохранение
-    let fileHandle = null;
-    let fileAutosaveEnabled = false;
-    let fileAutosaveBtn = null;
-
-    // Флаг ожидания решения по восстановлению
+    // Восстановление
     let pendingAutosaveDecision = false;
-    // Сырая строка найденного сохранения (фиксируем до любых перезаписей)
     const existingAutosaveRaw = localStorage.getItem(AUTO_KEY);
 
-    // DOM
+    // DOM элементы
     const gridEl = document.getElementById('grid');
     const cellInfoEl = document.getElementById('cellInfo');
     const zoomRangeEl = document.getElementById('zoomRange');
@@ -99,8 +102,10 @@
     }
 
     function selectCell(index) {
+      if (currentIndex === index) return;
       currentIndex = index;
       refreshGrid();
+      markDirty('select cell');
       autoSave();
     }
 
@@ -141,19 +146,24 @@
       if (currentIndex === null) return;
       const st = data[currentFloor][currentIndex];
       const bit = WALL[side];
+      const had = (st.walls & bit) !== 0;
+
       const { row, col } = indexToRowCol(currentIndex);
       let neighborIndex = null, opposite = null;
       if (side==='top') { neighborIndex = rowColToIndex(row-1,col); opposite='bottom'; }
       else if (side==='right') { neighborIndex = rowColToIndex(row,col+1); opposite='left'; }
       else if (side==='bottom') { neighborIndex = rowColToIndex(row+1,col); opposite='top'; }
       else if (side==='left') { neighborIndex = rowColToIndex(row,col-1); opposite='right'; }
-      const has = (st.walls & bit) !== 0;
-      if (has) {
+
+      if (had) {
         st.walls &= ~bit;
         if (neighborIndex!==null) data[currentFloor][neighborIndex].walls &= ~WALL[opposite];
       } else {
         st.walls |= bit;
         if (neighborIndex!==null) data[currentFloor][neighborIndex].walls |= WALL[opposite];
+      }
+      if (had !== ((st.walls & bit)!==0)) {
+        markDirty('toggle wall');
       }
       refreshGrid();
       autoSave();
@@ -171,9 +181,10 @@
     function toggleMarker(type) {
       if (currentIndex === null) return;
       const st = data[currentFloor][currentIndex];
-      if (type==='fork') st.fork = !st.fork;
-      if (type==='ladder') st.ladder = !st.ladder;
-      if (type==='exit') st.exit = !st.exit;
+      let before;
+      if (type==='fork') { before = st.fork; st.fork = !st.fork; if (before!==st.fork) markDirty('fork'); }
+      if (type==='ladder') { before = st.ladder; st.ladder = !st.ladder; if (before!==st.ladder) markDirty('ladder'); }
+      if (type==='exit') { before = st.exit; st.exit = !st.exit; if (before!==st.exit) markDirty('exit'); }
       refreshGrid();
       autoSave();
     }
@@ -181,7 +192,9 @@
     function toggleOpened() {
       if (currentIndex === null) return;
       const st = data[currentFloor][currentIndex];
+      const before = st.opened;
       st.opened = !st.opened;
+      if (before !== st.opened) markDirty('opened');
       refreshGrid();
       autoSave();
     }
@@ -189,6 +202,7 @@
     function setFloor(f) {
       if (f === currentFloor) return;
       currentFloor = f;
+      markDirty('floor change');
       refreshGrid();
       document.querySelectorAll('#floorButtons button').forEach(btn => {
         btn.classList.toggle('active', parseInt(btn.dataset.floor) === currentFloor);
@@ -232,6 +246,7 @@
       document.querySelectorAll('#floorButtons button').forEach(btn => {
         btn.classList.toggle('active', parseInt(btn.dataset.floor) === currentFloor);
       });
+      dirty = false;
     }
 
     function encodeCell(st) {
@@ -282,7 +297,7 @@
           const line = lines[idx+1+r];
           if (!line) throw new Error(`Недостаточно строк для FLOOR ${f}`);
           const tokens = line.split(/\s+/);
-          if (tokens.length !== COLS) throw new Error(`Строка ${r+1} этажа ${f}: ожидается ${COLS} токенов`);
+            if (tokens.length !== COLS) throw new Error(`Строка ${r+1} этажа ${f}: ожидается ${COLS} токенов`);
           rowsData.push(tokens);
         }
         floorBlocks.push(rowsData);
@@ -324,29 +339,20 @@
       document.querySelectorAll('#floorButtons button').forEach(btn => {
         btn.classList.toggle('active', parseInt(btn.dataset.floor) === currentFloor);
       });
+      dirty = false;
     }
 
     function autoSave() {
       if (suppressAutoSave) return;
+      if (!dirty) return;
       const exported = exportData();
       try {
         localStorage.setItem(AUTO_KEY, exported);
-        status('Автосохранено (localStorage)');
+        status('Автосохранено');
       } catch(e) {
-        status('Ошибка автосохранения (localStorage): ' + e.message);
+        status('Ошибка автосохранения: ' + e.message);
       }
-      if (fileAutosaveEnabled && fileHandle) {
-        (async () => {
-          try {
-            const writable = await fileHandle.createWritable();
-            await writable.write(exported);
-            await writable.close();
-            status('Автосохранено (файл)');
-          } catch(err) {
-            status('Ошибка записи файла: ' + err.message);
-          }
-        })();
-      }
+      dirty = false;
     }
 
     function restoreFromAutosave(raw) {
@@ -355,6 +361,7 @@
         importData(raw);
         exportAllFormatsToAreas();
         suppressAutoSave = false;
+        dirty = false;
         status('Восстановлено из автосохранения');
       } catch(e) {
         suppressAutoSave = false;
@@ -366,12 +373,11 @@
     function showAutosavePromptIfNeeded() {
       if (!existingAutosaveRaw) {
         status('Автосохранение отсутствует');
-        // Нет сохранения: запускаем обычный старт
         startNormalSession();
         return;
       }
       pendingAutosaveDecision = true;
-      suppressAutoSave = true; // блокируем любые записи
+      suppressAutoSave = true;
       const banner = document.createElement('div');
       banner.id = 'autosavePrompt';
       banner.style.cssText = `
@@ -404,25 +410,22 @@
 
       banner.querySelector('#autosaveLoadBtn').addEventListener('click', () => {
         restoreFromAutosave(existingAutosaveRaw);
-        currentIndex = currentIndex ?? 0;
+        if (currentIndex === null) currentIndex = 0;
         pendingAutosaveDecision = false;
         suppressAutoSave = false;
         banner.remove();
-        autoSave(); // закрепим состояние вновь
       });
       banner.querySelector('#autosaveDismissBtn').addEventListener('click', () => {
         status('Старое автосохранение проигнорировано');
         pendingAutosaveDecision = false;
         suppressAutoSave = false;
         banner.remove();
-        startNormalSession(true); // инициируем стандартное состояние
+        startNormalSession(true);
       });
     }
 
     function startNormalSession(fromIgnore = false) {
-      // Если мы ещё не выбрали клетку (например, запуск без сохранения или после игнора)
       if (currentIndex === null) {
-        // временно блокируем запись, чтобы selectCell не перезаписал прежнее сохранение (если был ignore=false)
         const prevSuppressed = suppressAutoSave;
         suppressAutoSave = true;
         currentIndex = 0;
@@ -433,11 +436,10 @@
         suppressAutoSave = prevSuppressed;
       }
       exportAllFormatsToAreas();
-      if (!pendingAutosaveDecision) {
-        // Первое реальное сохранение только если мы не ждём решения
+      if (fromIgnore) {
+        dirty = true;
         autoSave();
       }
-      if (fromIgnore) autoSave();
     }
 
     function exportAllFormatsToAreas() {
@@ -460,12 +462,14 @@
       if (currentIndex === null) return;
       data[currentFloor][currentIndex] = createCellState();
       refreshGrid();
+      markDirty('clear current');
       autoSave();
     }
     function clearFloor() {
       if (!confirm('Очистить весь текущий этаж?')) return;
       data[currentFloor] = Array.from({ length: TOTAL }, createCellState);
       refreshGrid();
+      markDirty('clear floor');
       autoSave();
     }
     function clearAll() {
@@ -476,6 +480,7 @@
       ];
       currentIndex = null;
       refreshGrid();
+      markDirty('clear all');
       autoSave();
     }
 
@@ -484,74 +489,7 @@
       zoomValueEl.textContent = val + 'px';
     }
 
-    // Файловое автосохранение
-    async function pickAutosaveFile() {
-      if (!window.showSaveFilePicker) {
-        alert('Ваш браузер не поддерживает File System Access API. Chrome / Edge.');
-        return;
-      }
-      try {
-        const handle = await window.showSaveFilePicker({
-          suggestedName: 'labyrinth_15x15.json',
-            types: [{
-            description: 'JSON файл лабиринта',
-            accept: { 'application/json': ['.json'] }
-          }]
-        });
-        fileHandle = handle;
-        fileAutosaveEnabled = true;
-        updateFileAutosaveButton();
-        status('Файл выбран для автосохранения');
-        autoSave();
-      } catch(e) {
-        if (e.name !== 'AbortError') {
-          alert('Не удалось выбрать файл: ' + e.message);
-          status('Ошибка выбора файла: ' + e.message);
-        }
-      }
-    }
-
-    function disableFileAutosave() {
-      fileAutosaveEnabled = false;
-      fileHandle = null;
-      updateFileAutosaveButton();
-      status('Автосохранение в файл выключено');
-    }
-
-    function toggleFileAutosave() {
-      if (fileAutosaveEnabled) {
-        disableFileAutosave();
-      } else {
-        pickAutosaveFile();
-      }
-    }
-
-    function updateFileAutosaveButton() {
-      if (!fileAutosaveBtn) return;
-      if (fileAutosaveEnabled) {
-        fileAutosaveBtn.textContent = 'Автофайл ON';
-        fileAutosaveBtn.classList.add('primary');
-      } else {
-        fileAutosaveBtn.textContent = 'Автофайл OFF';
-        fileAutosaveBtn.classList.remove('primary');
-      }
-    }
-
-    function injectFileAutosaveButton() {
-      const panel = document.getElementById('controlPanel') ||
-                    document.querySelector('#controlPanelContainer');
-      if (!panel) return;
-      fileAutosaveBtn = document.createElement('button');
-      fileAutosaveBtn.id = 'fileAutosaveBtn';
-      fileAutosaveBtn.type = 'button';
-      fileAutosaveBtn.style.marginBottom = '10px';
-      fileAutosaveBtn.textContent = 'Автофайл OFF';
-      fileAutosaveBtn.title = 'Автоматически записывать JSON в выбранный файл';
-      fileAutosaveBtn.addEventListener('click', toggleFileAutosave);
-      panel.insertBefore(fileAutosaveBtn, panel.firstChild);
-      updateFileAutosaveButton();
-    }
-
+    // Слушатели
     zoomRangeEl.addEventListener('input', e => applyZoom(e.target.value));
 
     document.getElementById('moveUp').addEventListener('click', () => moveSelection(-1,0));
@@ -570,8 +508,7 @@
 
     document.getElementById('exportBtn').addEventListener('click', () => {
       exportAllFormatsToAreas();
-      autoSave();
-      status('Сохранено: JSON + текст');
+      status('Сохранено: JSON + текст в поля');
     });
 
     document.getElementById('importBtn').addEventListener('click', (e) => {
@@ -594,7 +531,6 @@
           status('Загружено из JSON');
         }
         suppressAutoSave = false;
-        autoSave();
         exportAllFormatsToAreas();
       } catch(err) {
         suppressAutoSave = false;
@@ -627,7 +563,6 @@
             status('Файл загружен (JSON)');
           }
           suppressAutoSave = false;
-          autoSave();
           exportAllFormatsToAreas();
         } catch(err) {
           suppressAutoSave = false;
@@ -696,13 +631,9 @@
       applyZoom(suggested);
     }
 
-    // Инициализация (ВАЖНО: без раннего selectCell, если есть сохранение)
+    // Инициализация
     buildGrid();
     autoInitZoom();
-    injectFileAutosaveButton();
-    // Показываем предлож. восстановления (или начинаем обычную сессию)
     showAutosavePromptIfNeeded();
 
-    // Если сохранения нет, startNormalSession вызван внутри
-    // Если есть — ждём пользователя; после решения selectCell(0) будет выполнен через startNormalSession(fromIgnore) или импорт.
   })();
