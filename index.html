@@ -2,20 +2,38 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <script>
-    const V = '4';
-    const head = document.currentScript.parentElement;
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
-    link.href = 'styles.css?v=' + V;
-    head.appendChild(link);
-
-    const script = document.createElement('script');
-    script.src = 'app.js?v=' + V;
-    script.defer = true;
-    head.appendChild(script);
-  </script>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=yes" />
+   <script>
+    // Единственная точка смены версии
+    const V = '10'; // ← увеличиваете при изменении styles.css или app.js
+
+    // (Опционально) делаем глобально доступным
+    window.BUILD_VERSION = V;
+
+    // Функция подключения файла с версией
+    function addHeadAsset(tag, attrs) {
+      const el = document.createElement(tag);
+      for (const k in attrs) el[k] = attrs[k];
+      // Если href/src уже содержит ?, просто добавьте &v=...
+      if (el.href) {
+        el.href += (el.href.includes('?') ? '&' : '?') + 'v=' + V;
+      }
+      if (el.src) {
+        el.src += (el.src.includes('?') ? '&' : '?') + 'v=' + V;
+      }
+      document.head.appendChild(el);
+      return el;
+    }
+
+    // Подключаем CSS как можно раньше
+    addHeadAsset('link', { rel: 'stylesheet', href: 'styles.css' });
+
+    // Подключаем JS (defer чтобы выполнить после парсинга HTML)
+    addHeadAsset('script', { src: 'app.js', defer: true });
+
+    // Если нужно загрузить ещё что-то (пример, картинку-спрайт):
+    // addHeadAsset('link', { rel: 'preload', as: 'image', href: 'sprite.png' });
+  </script>
   <title>Редактор лабиринта v4 (Этаж + Подвал)</title>
   <meta name="description" content="Редактор лабиринта 15×15 (2 уровня) с автосохранением, экспортом JSON и текстового формата.">
   <link rel="stylesheet" href="styles.css">
