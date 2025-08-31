@@ -18,12 +18,15 @@
     let currentIndex = null;
     let suppressAutoSave = false;
 
-    // --- Файловое автосохранение ---
+    // Файловое автосохранение
     let fileHandle = null;
     let fileAutosaveEnabled = false;
     let fileAutosaveBtn = null;
-    // --------------------------------
-    let autosavePromptShown = false;
+
+    // Флаг ожидания решения по восстановлению
+    let pendingAutosaveDecision = false;
+    // Сырая строка найденного сохранения (фиксируем до любых перезаписей)
+    const existingAutosaveRaw = localStorage.getItem(AUTO_KEY);
 
     // DOM
     const gridEl = document.getElementById('grid');
@@ -323,7 +326,6 @@
       });
     }
 
-    // --- Автосохранение ---
     function autoSave() {
       if (suppressAutoSave) return;
       const exported = exportData();
@@ -347,20 +349,13 @@
       }
     }
 
-    // НЕ вызываем автоматически: оставлено для ручного использования
-    function tryRestore() {
-      const raw = localStorage.getItem(AUTO_KEY);
-      if (!raw) { status('Автосохранение отсутствует'); return; }
-      restoreFromAutosave(raw);
-    }
-
     function restoreFromAutosave(raw) {
       try {
         suppressAutoSave = true;
         importData(raw);
+        exportAllFormatsToAreas();
         suppressAutoSave = false;
         status('Восстановлено из автосохранения');
-        exportAllFormatsToAreas();
       } catch(e) {
         suppressAutoSave = false;
         status('Не удалось восстановить: ' + e.message);
@@ -368,15 +363,15 @@
       }
     }
 
-    function showAutosavePrompt() {
-      if (autosavePromptShown) return;
-      const raw = localStorage.getItem(AUTO_KEY);
-      if (!raw) {
+    function showAutosavePromptIfNeeded() {
+      if (!existingAutosaveRaw) {
         status('Автосохранение отсутствует');
+        // Нет сохранения: запускаем обычный старт
+        startNormalSession();
         return;
       }
-      autosavePromptShown = true;
-      // Создаём баннер
+      pendingAutosaveDecision = true;
+      suppressAutoSave = true; // блокируем любые записи
       const banner = document.createElement('div');
       banner.id = 'autosavePrompt';
       banner.style.cssText = `
@@ -394,25 +389,55 @@
         align-items:center;
       `;
       banner.innerHTML = `
-        <span style="font-weight:600;">Найдено автосохранение.</span>
-        <span>Загрузить его состояние?</span>
+        <span style="font-weight:600;">Найдено предыдущее автосохранение.</span>
+        <span>Загрузить его?</span>
         <div style="margin-left:auto;display:flex;gap:8px;">
           <button type="button" id="autosaveLoadBtn" class="primary" style="min-height:32px;">Загрузить</button>
           <button type="button" id="autosaveDismissBtn" style="min-height:32px;">Игнорировать</button>
         </div>
       `;
-      const controlPanel = document.getElementById('controlPanel');
-      controlPanel.insertBefore(banner, controlPanel.firstChild);
+      const container = document.getElementById('controlPanel') ||
+                        document.querySelector('#controlPanelContainer') ||
+                        document.body;
+      container.insertBefore(banner, container.firstChild);
+      status('Найдено автосохранение (ожидание решения)');
 
       banner.querySelector('#autosaveLoadBtn').addEventListener('click', () => {
-        restoreFromAutosave(raw);
+        restoreFromAutosave(existingAutosaveRaw);
+        currentIndex = currentIndex ?? 0;
+        pendingAutosaveDecision = false;
+        suppressAutoSave = false;
         banner.remove();
+        autoSave(); // закрепим состояние вновь
       });
       banner.querySelector('#autosaveDismissBtn').addEventListener('click', () => {
-        status('Автосохранение найдено, пропущено');
+        status('Старое автосохранение проигнорировано');
+        pendingAutosaveDecision = false;
+        suppressAutoSave = false;
         banner.remove();
+        startNormalSession(true); // инициируем стандартное состояние
       });
-      status('Найдено автосохранение (ожидает решения)');
+    }
+
+    function startNormalSession(fromIgnore = false) {
+      // Если мы ещё не выбрали клетку (например, запуск без сохранения или после игнора)
+      if (currentIndex === null) {
+        // временно блокируем запись, чтобы selectCell не перезаписал прежнее сохранение (если был ignore=false)
+        const prevSuppressed = suppressAutoSave;
+        suppressAutoSave = true;
+        currentIndex = 0;
+        refreshGrid();
+        updateOpenedButtonVisual();
+        updateWallsButtonsState();
+        updateCellInfo();
+        suppressAutoSave = prevSuppressed;
+      }
+      exportAllFormatsToAreas();
+      if (!pendingAutosaveDecision) {
+        // Первое реальное сохранение только если мы не ждём решения
+        autoSave();
+      }
+      if (fromIgnore) autoSave();
     }
 
     function exportAllFormatsToAreas() {
@@ -459,16 +484,16 @@
       zoomValueEl.textContent = val + 'px';
     }
 
-    // ---- Файловое автосохранение ----
+    // Файловое автосохранение
     async function pickAutosaveFile() {
       if (!window.showSaveFilePicker) {
-        alert('Ваш браузер не поддерживает File System Access API. Доступно в Chrome / Edge.');
+        alert('Ваш браузер не поддерживает File System Access API. Chrome / Edge.');
         return;
       }
       try {
         const handle = await window.showSaveFilePicker({
           suggestedName: 'labyrinth_15x15.json',
-          types: [{
+            types: [{
             description: 'JSON файл лабиринта',
             accept: { 'application/json': ['.json'] }
           }]
@@ -513,19 +538,19 @@
     }
 
     function injectFileAutosaveButton() {
-      const panel = document.getElementById('controlPanel');
+      const panel = document.getElementById('controlPanel') ||
+                    document.querySelector('#controlPanelContainer');
       if (!panel) return;
       fileAutosaveBtn = document.createElement('button');
       fileAutosaveBtn.id = 'fileAutosaveBtn';
       fileAutosaveBtn.type = 'button';
       fileAutosaveBtn.style.marginBottom = '10px';
       fileAutosaveBtn.textContent = 'Автофайл OFF';
-      fileAutosaveBtn.title = 'Автоматически записывать JSON в выбранный файл (только поддерживаемые браузеры)';
+      fileAutosaveBtn.title = 'Автоматически записывать JSON в выбранный файл';
       fileAutosaveBtn.addEventListener('click', toggleFileAutosave);
-      panel.insertBefore(fileAutosaveBtn, panel.firstChild.nextSibling || panel.firstChild);
+      panel.insertBefore(fileAutosaveBtn, panel.firstChild);
       updateFileAutosaveButton();
     }
-    // ---------------------------------
 
     zoomRangeEl.addEventListener('input', e => applyZoom(e.target.value));
 
@@ -671,11 +696,13 @@
       applyZoom(suggested);
     }
 
-    // Инициализация
+    // Инициализация (ВАЖНО: без раннего selectCell, если есть сохранение)
     buildGrid();
-    selectCell(0);
     autoInitZoom();
-    exportAllFormatsToAreas();
     injectFileAutosaveButton();
-    showAutosavePrompt(); // показываем предложение восстановить, если есть сохранение
+    // Показываем предлож. восстановления (или начинаем обычную сессию)
+    showAutosavePromptIfNeeded();
+
+    // Если сохранения нет, startNormalSession вызван внутри
+    // Если есть — ждём пользователя; после решения selectCell(0) будет выполнен через startNormalSession(fromIgnore) или импорт.
   })();
