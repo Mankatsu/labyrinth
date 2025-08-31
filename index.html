@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=yes" />
+  <title>Редактор лабиринта 15×15 (Этаж + Подвал)</title>
+  <meta name="description" content="Редактор лабиринта 15×15 (2 уровня) с автосохранением, экспортом JSON и текстового формата.">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header>
+    <h1>Редактор лабиринта 15×15 <span class="badge">2 этажа</span></h1>
+    <div style="font-size:12px; opacity:.9;">Две крестовины + автосохранение + текстовый формат</div>
+  </header>
+
+  <div id="app">
+    <div class="panel" id="gridPanel">
+      <h2 style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        Карта
+        <button id="collapseBtn" class="collapse-toggle" style="display:none;">Меню ▲</button>
+      </h2>
+
+      <div class="floor-buttons controls-group" id="floorButtons">
+        <button data-floor="0" class="active">1 этаж</button>
+        <button data-floor="1">Подвал</button>
+      </div>
+
+      <div class="zoom-row">
+        <label for="zoomRange" style="font-size:12px;font-weight:600;">Размер клеток</label>
+        <input type="range" id="zoomRange" min="16" max="52" value="32" />
+        <div class="zoom-badge" id="zoomValue">32px</div>
+      </div>
+
+      <div id="gridWrapper">
+        <div id="grid" aria-label="Сетка лабиринта"></div>
+      </div>
+
+      <div class="legend">
+        <span><i class="fork"></i> Развилка</span>
+        <span><i class="ladder"></i> Лестница</span>
+        <span><i class="exit"></i> Выход</span>
+        <span><i class="opened"></i> Открыта</span>
+        <span><i class="wall"></i> Стена</span>
+      </div>
+
+      <div class="coords-display" id="cellInfo">Текущая клетка: —</div>
+
+      <div class="grid-tools-inline">
+        <button id="clearCurrent" title="Стереть только выделенную клетку">Очистить клетку</button>
+        <button id="clearFloor" title="Очистить все клетки текущего этажа">Очистить этаж</button>
+        <button class="danger" id="clearAll" title="Полный сброс обоих этажей">Сбросить всё</button>
+      </div>
+
+      <div class="small-note">
+        Касание по клетке — выбор. Стены ставятся зеркально у соседних клеток.
+      </div>
+    </div>
+
+    <div id="controlPanelContainer" style="flex:1;min-width:300px;max-width:640px;">
+      <div class="panel" id="controlPanel">
+        <h2>Управление</h2>
+
+        <div class="section">
+          <strong>Перемещение и стены</strong>
+          <div class="dpad-row">
+            <div class="dpad" role="group" aria-label="Перемещение">
+              <button id="moveUp" class="dpad-up" aria-label="Вверх">↑</button>
+              <button id="moveLeft" class="dpad-left" aria-label="Влево">←</button>
+              <button id="markOpened" class="dpad-center" aria-label="Ход (H)" title="Ход (H)">Ход</button>
+              <button id="moveRight" class="dpad-right" aria-label="Вправо">→</button>
+              <button id="moveDown" class="dpad-down" aria-label="Вниз">↓</button>
+            </div>
+            <div class="walls-dpad" role="group" aria-label="Стены">
+              <button data-wall="top" class="wall-up" aria-label="Стена сверху">↑ <span>(1)</span></button>
+              <button data-wall="left" class="wall-left" aria-label="Стена слева">← <span>(4)</span></button>
+              <button data-wall="right" class="wall-right" aria-label="Стена справа">→ <span>(2)</span></button>
+              <button data-wall="bottom" class="wall-down" aria-label="Стена снизу">↓ <span>(3)</span></button>
+            </div>
+          </div>
+          <div class="small-note">
+            W A S D / стрелки — движение. Центр: Ход (H). Стены: 1↑ 2→ 3↓ 4←.
+          </div>
+        </div>
+
+        <div class="section">
+          <strong>Маркировка</strong>
+          <div class="controls-group">
+            <button id="toggleFork">Развилка (F)</button>
+            <button id="toggleLadder">Лестница (L)</button>
+            <button id="toggleExit">Выход (E)</button>
+          </div>
+          <div class="small-note">
+            Маркеры комбинируются. "Открыта" (Ход) — отдельный слой.
+          </div>
+        </div>
+
+        <div class="section">
+          <strong>Сохранение / Загрузка</strong>
+          <div class="controls-group">
+            <button id="exportBtn" class="primary" title="Сохранить (обновить JSON и текст)">Сохранение</button>
+            <button id="importBtn" title="Загрузка из полей (Shift — выбор файла)">Загрузка</button>
+            <button id="importFileBtn" class="icon-btn small" title="Загрузить из файла">⬆️ <span class="hint">файл</span></button>
+            <button id="downloadBtn" title="Скачать как JSON файл">Скачать</button>
+            <input type="file" id="fileInput" accept=".json,.txt,text/plain,application/json" style="display:none;" />
+          </div>
+          <textarea id="dataArea" class="export-area short" placeholder="JSON данные (генерируется при сохранении или вставьте для загрузки)"></textarea>
+          <textarea id="textArea" class="export-area short" placeholder="Формат LABYRINTH-TEXT v1 (вставьте для загрузки)"></textarea>
+          <div class="small-note">
+            Стрелка ⬆️ — открыть файл. 'Загрузка' читает из полей (Shift — файл). Автосохранение активно.
+          </div>
+          <div id="statusLine"></div>
+        </div>
+
+        <div class="section">
+          <strong>Горячие клавиши</strong>
+          <div class="small-note">
+            W A S D / стрелки – движение | 1 2 3 4 – стены ↑ → ↓ ←<br/>
+            F – развилка | L – лестница | E – выход | H – ход | Tab – переключить этаж
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Лабиринт 15×15 (2 уровня). Автосохранение активно. Версия данных: v4 / Текст: v1.
+  </footer>
+
+  <script src="js/app.js" defer></script>
+</body>
+</html>
