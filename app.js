@@ -1,4 +1,11 @@
   (function() {
+    // GUARD: предотвращаем повторную инициализацию
+    if (window.__LABYRINTH_APP_INITED) {
+      console.warn('Labyrinth app already initialized — second script execution skipped.');
+      return;
+    }
+    window.__LABYRINTH_APP_INITED = true;
+
     const COLS = 15;
     const ROWS = 15;
     const TOTAL = COLS * ROWS;
@@ -44,10 +51,13 @@
     const importFileBtn = document.getElementById('importFileBtn');
 
     function status(msg) {
-      statusLine.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+      if (statusLine) {
+        statusLine.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+      }
     }
 
     function buildGrid() {
+      if (!gridEl) return;
       gridEl.innerHTML = '';
       for (let i=0;i<TOTAL;i++) {
         const cell = document.createElement('div');
@@ -77,24 +87,26 @@
 
     function refreshGrid() {
       const floorData = data[currentFloor];
-      gridEl.querySelectorAll('.cell').forEach(cell => {
-        const i = parseInt(cell.dataset.index);
-        const st = floorData[i];
-        cell.className = 'cell';
-        if (st.walls & WALL.top) cell.classList.add('wall-top');
-        if (st.walls & WALL.right) cell.classList.add('wall-right');
-        if (st.walls & WALL.bottom) cell.classList.add('wall-bottom');
-        if (st.walls & WALL.left) cell.classList.add('wall-left');
-        if (st.fork) cell.classList.add('fork');
-        if (st.ladder) cell.classList.add('ladder');
-        if (st.exit) cell.classList.add('exit');
-        if (st.opened) cell.classList.add('opened');
-      });
-      if (currentIndex !== null) {
+      if (gridEl) {
+        gridEl.querySelectorAll('.cell').forEach(cell => {
+          const i = parseInt(cell.dataset.index);
+            const st = floorData[i];
+          cell.className = 'cell';
+          if (st.walls & WALL.top) cell.classList.add('wall-top');
+          if (st.walls & WALL.right) cell.classList.add('wall-right');
+          if (st.walls & WALL.bottom) cell.classList.add('wall-bottom');
+          if (st.walls & WALL.left) cell.classList.add('wall-left');
+          if (st.fork) cell.classList.add('fork');
+          if (st.ladder) cell.classList.add('ladder');
+          if (st.exit) cell.classList.add('exit');
+          if (st.opened) cell.classList.add('opened');
+        });
+      }
+      if (currentIndex !== null && gridEl) {
         const sel = gridEl.querySelector('.cell[data-index="'+currentIndex+'"]');
         if (sel) sel.classList.add('selected');
         updateCellInfo();
-      } else {
+      } else if (cellInfoEl) {
         cellInfoEl.textContent = 'Текущая клетка: —';
       }
       updateOpenedButtonVisual();
@@ -110,6 +122,7 @@
     }
 
     function updateOpenedButtonVisual() {
+      if (!markOpenedBtn) return;
       if (currentIndex === null) {
         markOpenedBtn.classList.remove('active');
         return;
@@ -129,7 +142,7 @@
     }
 
     function updateCellInfo() {
-      if (currentIndex === null) return;
+      if (currentIndex === null || !cellInfoEl) return;
       const id = currentIndex + 1;
       const { row, col } = indexToRowCol(currentIndex);
       const st = data[currentFloor][currentIndex];
@@ -297,7 +310,7 @@
           const line = lines[idx+1+r];
           if (!line) throw new Error(`Недостаточно строк для FLOOR ${f}`);
           const tokens = line.split(/\s+/);
-            if (tokens.length !== COLS) throw new Error(`Строка ${r+1} этажа ${f}: ожидается ${COLS} токенов`);
+          if (tokens.length !== COLS) throw new Error(`Строка ${r+1} этажа ${f}: ожидается ${COLS} токенов`);
           rowsData.push(tokens);
         }
         floorBlocks.push(rowsData);
@@ -371,6 +384,10 @@
     }
 
     function showAutosavePromptIfNeeded() {
+      // NEW GUARD: если баннер уже есть — не создаём второй
+      if (document.getElementById('autosavePrompt')) {
+        return;
+      }
       if (!existingAutosaveRaw) {
         status('Автосохранение отсутствует');
         startNormalSession();
@@ -443,8 +460,8 @@
     }
 
     function exportAllFormatsToAreas() {
-      jsonArea.value = exportData();
-      textArea.value = exportText();
+      if (jsonArea) jsonArea.value = exportData();
+      if (textArea) textArea.value = exportText();
     }
 
     function downloadJSON() {
@@ -486,38 +503,49 @@
 
     function applyZoom(val) {
       document.documentElement.style.setProperty('--size-base', val);
-      zoomValueEl.textContent = val + 'px';
+      if (zoomValueEl) zoomValueEl.textContent = val + 'px';
     }
 
     // Слушатели
-    zoomRangeEl.addEventListener('input', e => applyZoom(e.target.value));
+    if (zoomRangeEl) zoomRangeEl.addEventListener('input', e => applyZoom(e.target.value));
 
-    document.getElementById('moveUp').addEventListener('click', () => moveSelection(-1,0));
-    document.getElementById('moveDown').addEventListener('click', () => moveSelection(1,0));
-    document.getElementById('moveLeft').addEventListener('click', () => moveSelection(0,-1));
-    document.getElementById('moveRight').addEventListener('click', () => moveSelection(0,1));
+    const btnUp = document.getElementById('moveUp');
+    const btnDown = document.getElementById('moveDown');
+    const btnLeft = document.getElementById('moveLeft');
+    const btnRight = document.getElementById('moveRight');
+    btnUp && btnUp.addEventListener('click', () => moveSelection(-1,0));
+    btnDown && btnDown.addEventListener('click', () => moveSelection(1,0));
+    btnLeft && btnLeft.addEventListener('click', () => moveSelection(0,-1));
+    btnRight && btnRight.addEventListener('click', () => moveSelection(0,1));
 
     document.querySelectorAll('.walls-dpad [data-wall]').forEach(btn =>
       btn.addEventListener('click', () => toggleWall(btn.dataset.wall))
     );
 
-    markOpenedBtn.addEventListener('click', toggleOpened);
-    document.getElementById('toggleFork').addEventListener('click', () => toggleMarker('fork'));
-    document.getElementById('toggleLadder').addEventListener('click', () => toggleMarker('ladder'));
-    document.getElementById('toggleExit').addEventListener('click', () => toggleMarker('exit'));
+    markOpenedBtn && markOpenedBtn.addEventListener('click', toggleOpened);
+    const btnFork = document.getElementById('toggleFork');
+    const btnLadder = document.getElementById('toggleLadder');
+    const btnExit = document.getElementById('toggleExit');
+    btnFork && btnFork.addEventListener('click', () => toggleMarker('fork'));
+    btnLadder && btnLadder.addEventListener('click', () => toggleMarker('ladder'));
+    btnExit && btnExit.addEventListener('click', () => toggleMarker('exit'));
 
-    document.getElementById('exportBtn').addEventListener('click', () => {
+    const exportBtn = document.getElementById('exportBtn');
+    exportBtn && exportBtn.addEventListener('click', () => {
       exportAllFormatsToAreas();
       status('Сохранено: JSON + текст в поля');
     });
 
-    document.getElementById('importBtn').addEventListener('click', (e) => {
-      const ttxt = textArea.value.trim();
-      const jtxt = jsonArea.value.trim();
+    const importBtn = document.getElementById('importBtn');
+    importBtn && importBtn.addEventListener('click', (e) => {
+      const ttxt = textArea ? textArea.value.trim() : '';
+      const jtxt = jsonArea ? jsonArea.value.trim() : '';
       const needFile = e.shiftKey || (!ttxt && !jtxt);
       if (needFile) {
-        fileInput.value = '';
-        fileInput.click();
+        if (fileInput) {
+          fileInput.value = '';
+          fileInput.click();
+        }
         status(e.shiftKey ? 'Открыт диалог выбора файла (Shift)' : 'Поля пусты — открыт диалог файла');
         return;
       }
@@ -539,15 +567,18 @@
       }
     });
 
-    importFileBtn.addEventListener('click', () => {
-      fileInput.value = '';
-      fileInput.click();
+    importFileBtn && importFileBtn.addEventListener('click', () => {
+      if (fileInput) {
+        fileInput.value = '';
+        fileInput.click();
+      }
       status('Открыт диалог выбора файла');
     });
 
-    document.getElementById('downloadBtn').addEventListener('click', downloadJSON);
+    const downloadBtn = document.getElementById('downloadBtn');
+    downloadBtn && downloadBtn.addEventListener('click', downloadJSON);
 
-    fileInput.addEventListener('change', (e) => {
+    fileInput && fileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
@@ -573,11 +604,15 @@
       reader.readAsText(file);
     });
 
-    document.getElementById('clearCurrent').addEventListener('click', clearCurrent);
-    document.getElementById('clearFloor').addEventListener('click', clearFloor);
-    document.getElementById('clearAll').addEventListener('click', clearAll);
+    const clearCurrentBtn = document.getElementById('clearCurrent');
+    const clearFloorBtn = document.getElementById('clearFloor');
+    const clearAllBtn = document.getElementById('clearAll');
+    clearCurrentBtn && clearCurrentBtn.addEventListener('click', clearCurrent);
+    clearFloorBtn && clearFloorBtn.addEventListener('click', clearFloor);
+    clearAllBtn && clearAllBtn.addEventListener('click', clearAll);
 
-    document.getElementById('floorButtons').addEventListener('click', (e) => {
+    const floorButtons = document.getElementById('floorButtons');
+    floorButtons && floorButtons.addEventListener('click', (e) => {
       if (e.target.tagName === 'BUTTON') setFloor(parseInt(e.target.dataset.floor));
     });
 
@@ -608,7 +643,7 @@
     });
 
     let lastTapTime = 0;
-    gridEl.addEventListener('touchend', () => {
+    gridEl && gridEl.addEventListener('touchend', () => {
       const now = Date.now();
       if (now - lastTapTime < 350) {
         const cur = parseInt(zoomRangeEl.value,10);
@@ -621,6 +656,7 @@
     });
 
     function autoInitZoom() {
+      if (!zoomRangeEl) return;
       const vw = window.innerWidth;
       let suggested = 32;
       if (vw < 380) suggested = 20;
